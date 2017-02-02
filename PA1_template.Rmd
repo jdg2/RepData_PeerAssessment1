@@ -1,25 +1,120 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: 'Reproducible Research: Peer Assessment 1'
+author: "Jake Gundrum"
+date: "February 1, 2017"
+output: html_document
 ---
 
-
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 
+## Loading and Preprocessing the data
+first load packages that will be used
+```{r load packages, results = "hide", warning = FALSE, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+```
 
-## What is the average daily activity pattern?
+read the raw data
+```{r read data}
+data_input <- read.csv("./activity.csv", stringsAsFactors = FALSE)
+```
+Check the structure to see what variables need to be formatted or changed
+```{r check structure}
+str(data_input)
+```
+the date will need to be coerced into date format
+```{r coerce date}
+data_input$date <- as.Date(data_input$date)
+```
 
+## What is the mean number of steps taken per day?
+create histogram of steps taken per day
+```{r histogram of steps per day, message = FALSE, warning = FALSE}
+data_input %>% group_by(date) %>%
+               summarize(steps = sum(steps, na.rm = TRUE)) %>% 
+               ggplot(aes(steps)) +
+                    geom_histogram() +
+                    ggtitle("Steps Taken per day")
+```
 
+calculate the total, median, and mean number of steps per day
+```{r calculate steps per day}
+summaryNum <- data_input %>% group_by(date) %>%
+                             summarize(steps = sum(steps, na.rm = TRUE)) %>% 
+                             as.data.frame() %>% 
+                             summarize(meanSteps = mean(steps, na.rm = TRUE),
+                             medianSteps = median(steps, na.rm = TRUE))
+summaryNum
+```
+## What is the daily average activity pattern?
+Group data by average activity at interval
+```{r Group by Interval of Day}
+data_input %>% group_by(interval) %>% 
+               summarize(steps = mean(steps, na.rm = TRUE)) %>%
+               as.data.frame() %>% 
+                 ggplot(aes(x = interval, y = steps)) +
+                 geom_line(col = "steelblue") +
+                 ggtitle("Average Activity Throughout the Day")
+```
 
-## Imputing missing values
+Which interval has the highest step average?
+```{r interval with highest step average}
+data_input %>% group_by(interval) %>% 
+               summarize(steps = mean(steps, na.rm = TRUE)) %>%
+               as.data.frame() %>% 
+               arrange(-steps) %>% 
+               head(1)
+```
 
+## Imputing Missing Values
+imput missing values based on their interval average
+```{r impute missing values}
+int_avg <- data_input %>% group_by(interval) %>% 
+               summarize(steps = mean(steps, na.rm = TRUE)) %>%
+               as.data.frame()
+data_imputed <- data_input
+for (ii in 1:nrow(data_imputed)) {
+        if(!is.na(data_imputed[ii,"steps"])){next}
+        else{
+            data_imputed[ii,"steps"] <- int_avg[data_imputed[ii,"interval"] == int_avg[,"interval"], "steps"]
+        }  
+  }
+```
+Create a histogram with the imputed values to see if there is any difference
+create histogram of steps taken per day
+```{r histogram of steps per day (imputed data), message = FALSE, warning = FALSE}
+data_imputed %>% group_by(date) %>%
+               summarize(steps = sum(steps, na.rm = TRUE)) %>% 
+               ggplot(aes(steps)) +
+                    geom_histogram() +
+                    ggtitle("Steps Taken per day (imputed)")
+```
+calculate the total, median, and mean number of steps per day with imputed data
+```{r calculate steps per day (imputed)}
+summaryImp <- data_imputed %>% group_by(date) %>%
+                               summarize(steps = sum(steps, na.rm = TRUE)) %>% 
+                               as.data.frame() %>% 
+                               summarize(meanSteps = mean(steps, na.rm = TRUE),
+                               medianSteps = median(steps, na.rm = TRUE))
+summaryImp
+```
+As expected, the imputed data shows higher mean and median, this is because the daily step count is raised as a result of adding in unknowns that previously counted as zero when aggregating daily steps
 
+## Are there differences in activity patters between weekdays and weekends?
+Create a variable for day of week and weekend then look at the differences using the imputed data
+```{r create variable and chart weekday/weekend}
+data_imputed %>% mutate(dayOfWeek = wday(date, label = TRUE),
+                        weekend   = ifelse(dayOfWeek %in% c("Sun", "Sat"),"Weekend","Weekday")) %>% 
+                 group_by(weekend, interval) %>% 
+                 summarize(steps = mean(steps, na.rm = TRUE)) %>% 
+                 as.data.frame() %>%
+                 ggplot(aes(x = interval, y = steps)) +
+                 geom_line() +
+                 facet_grid(weekend~.) +
+                 ggtitle("Movement Pattern by Day of Week")
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
